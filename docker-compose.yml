@@ -1,0 +1,181 @@
+services:
+  # --- PostgreSQL (shared database) ---
+  postgres:
+    image: postgres:16
+    container_name: gestion-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./nocodb/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+    networks:
+      - gestion-locative
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Redis (Paperless cache) ---
+  redis:
+    image: redis:7
+    container_name: gestion-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - gestion-locative
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Firefly III (accounting) ---
+  firefly:
+    image: fireflyiii/core:latest
+    container_name: gestion-firefly
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./firefly/.env
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${FIREFLY_DB_NAME}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - firefly_upload:/var/www/html/storage/upload
+    networks:
+      - gestion-locative
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.firefly.rule=Host(`firefly.homelab.local`)"
+      - "traefik.http.routers.firefly.entrypoints=websecure"
+      - "traefik.http.routers.firefly.tls=true"
+      - "traefik.http.services.firefly.loadbalancer.server.port=8080"
+
+  # --- Firefly Data Importer ---
+  firefly-importer:
+    image: fireflyiii/data-importer:latest
+    container_name: gestion-firefly-importer
+    restart: unless-stopped
+    depends_on:
+      - firefly
+    environment:
+      FIREFLY_III_URL: http://firefly:8080
+      FIREFLY_III_ACCESS_TOKEN: ${FIREFLY_III_ACCESS_TOKEN}
+      NORDIGEN_ID: ${NORDIGEN_ID}
+      NORDIGEN_KEY: ${NORDIGEN_KEY}
+    networks:
+      - gestion-locative
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.firefly-importer.rule=Host(`firefly-import.homelab.local`)"
+      - "traefik.http.routers.firefly-importer.entrypoints=websecure"
+      - "traefik.http.routers.firefly-importer.tls=true"
+      - "traefik.http.services.firefly-importer.loadbalancer.server.port=8081"
+
+  # --- Paperless-ngx (document management) ---
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: gestion-paperless
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PAPERLESS_DBHOST: postgres
+      PAPERLESS_DBNAME: ${PAPERLESS_DB_NAME}
+      PAPERLESS_DBUSER: ${POSTGRES_USER}
+      PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}
+      PAPERLESS_REDIS: redis://redis:6379
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER}
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
+      PAPERLESS_OCR_LANGUAGE: fra
+      PAPERLESS_TIME_ZONE: Europe/Paris
+      PAPERLESS_FILENAME_FORMAT: "{document_type}/{created_year}/{correspondent}-{title}"
+    volumes:
+      - paperless_data:/usr/src/paperless/data
+      - paperless_media:/usr/src/paperless/media
+      - ./paperless/consume:/usr/src/paperless/consume
+      - ./paperless/export:/usr/src/paperless/export
+    networks:
+      - gestion-locative
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.paperless.rule=Host(`paperless.homelab.local`)"
+      - "traefik.http.routers.paperless.entrypoints=websecure"
+      - "traefik.http.routers.paperless.tls=true"
+      - "traefik.http.services.paperless.loadbalancer.server.port=8000"
+
+  # --- NocoDB (rental database) ---
+  nocodb:
+    image: nocodb/nocodb:latest
+    container_name: gestion-nocodb
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NC_DB: "pg://postgres:5432?u=${POSTGRES_USER}&p=${POSTGRES_PASSWORD}&d=${NOCODB_DB_NAME}"
+      NC_AUTH_JWT_SECRET: ${NOCODB_JWT_SECRET}
+    volumes:
+      - nocodb_data:/usr/app/data
+    networks:
+      - gestion-locative
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nocodb.rule=Host(`nocodb.homelab.local`)"
+      - "traefik.http.routers.nocodb.entrypoints=websecure"
+      - "traefik.http.routers.nocodb.tls=true"
+      - "traefik.http.services.nocodb.loadbalancer.server.port=8080"
+
+  # --- Vikunja (task/kanban for maintenance) ---
+  vikunja:
+    image: vikunja/vikunja:latest
+    container_name: gestion-vikunja
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      VIKUNJA_DATABASE_TYPE: postgres
+      VIKUNJA_DATABASE_HOST: postgres
+      VIKUNJA_DATABASE_DATABASE: ${VIKUNJA_DB_NAME}
+      VIKUNJA_DATABASE_USER: ${POSTGRES_USER}
+      VIKUNJA_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      VIKUNJA_SERVICE_JWTSECRET: ${VIKUNJA_JWT_SECRET}
+      VIKUNJA_SERVICE_FRONTENDURL: https://vikunja.homelab.local
+    volumes:
+      - vikunja_data:/app/vikunja/files
+    networks:
+      - gestion-locative
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vikunja.rule=Host(`vikunja.homelab.local`)"
+      - "traefik.http.routers.vikunja.entrypoints=websecure"
+      - "traefik.http.routers.vikunja.tls=true"
+      - "traefik.http.services.vikunja.loadbalancer.server.port=3456"
+
+volumes:
+  postgres_data:
+  redis_data:
+  firefly_upload:
+  paperless_data:
+  paperless_media:
+  nocodb_data:
+  vikunja_data:
+
+networks:
+  gestion-locative:
+    name: gestion-locative

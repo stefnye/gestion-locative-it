@@ -1,0 +1,62 @@
+http:
+  routers:
+    firefly:
+      rule: "Host(`firefly.homelab.local`)"
+      entryPoints:
+        - websecure
+      service: firefly
+      tls: {}
+
+    firefly-import:
+      rule: "Host(`firefly-import.homelab.local`)"
+      entryPoints:
+        - websecure
+      service: firefly-import
+      tls: {}
+
+    paperless:
+      rule: "Host(`paperless.homelab.local`)"
+      entryPoints:
+        - websecure
+      service: paperless
+      tls: {}
+
+    nocodb:
+      rule: "Host(`nocodb.homelab.local`)"
+      entryPoints:
+        - websecure
+      service: nocodb
+      tls: {}
+
+    vikunja:
+      rule: "Host(`vikunja.homelab.local`)"
+      entryPoints:
+        - websecure
+      service: vikunja
+      tls: {}
+
+  services:
+    firefly:
+      loadBalancer:
+        servers:
+          - url: "http://gestion-firefly:8080"
+
+    firefly-import:
+      loadBalancer:
+        servers:
+          - url: "http://gestion-firefly-importer:8081"
+
+    paperless:
+      loadBalancer:
+        servers:
+          - url: "http://gestion-paperless:8000"
+
+    nocodb:
+      loadBalancer:
+        servers:
+          - url: "http://gestion-nocodb:8080"
+
+    vikunja:
+      loadBalancer:
+        servers:
+          - url: "http://gestion-vikunja:3456"
