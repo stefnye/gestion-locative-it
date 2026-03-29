@@ -1,0 +1,59 @@
+{
+  "name": "WF-03 : Révision annuelle IRL",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 9 1 * *" }]
+        }
+      },
+      "name": "Cron mensuel (vérif date anniversaire)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "notes": "Vérifie si un bail a sa date anniversaire ce mois-ci"
+    },
+    {
+      "parameters": {
+        "url": "https://www.insee.fr/fr/statistiques/serie/001515333",
+        "options": {}
+      },
+      "name": "Scrape IRL INSEE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "notes": "Récupère le dernier indice IRL publié par l'INSEE"
+    },
+    {
+      "parameters": {},
+      "name": "Calcul nouveau loyer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "notes": "ancien_loyer × (nouvel_IRL / ancien_IRL) + vérification plafond LLI"
+    },
+    {
+      "parameters": {},
+      "name": "MAJ NocoDB (bail)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 200],
+      "notes": "Met à jour loyer_hc et indice_irl_ref dans la table baux"
+    },
+    {
+      "parameters": {},
+      "name": "Générer lettre révision Typst",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [900, 400],
+      "notes": "Compile revision-irl.typ → PDF"
+    }
+  ],
+  "connections": {
+    "Cron mensuel (vérif date anniversaire)": { "main": [[{ "node": "Scrape IRL INSEE", "type": "main", "index": 0 }]] },
+    "Scrape IRL INSEE": { "main": [[{ "node": "Calcul nouveau loyer", "type": "main", "index": 0 }]] },
+    "Calcul nouveau loyer": { "main": [[{ "node": "MAJ NocoDB (bail)", "type": "main", "index": 0 }, { "node": "Générer lettre révision Typst", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gestion-locative" }]
+}

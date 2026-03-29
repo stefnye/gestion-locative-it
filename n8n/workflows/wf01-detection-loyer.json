@@ -1,0 +1,47 @@
+{
+  "name": "WF-01 : Détection encaissement loyer",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }]
+        }
+      },
+      "name": "Cron quotidien",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.FIREFLY_URL }}/api/v1/transactions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "Vérifier transaction Firefly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "notes": "Appel API Firefly III pour vérifier si le loyer du mois est reçu"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.found }}", "value2": true }]
+        }
+      },
+      "name": "Loyer reçu ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "notes": "Si reçu → WF-02 quittance. Si absent à J+5 → alerte Telegram."
+    }
+  ],
+  "connections": {
+    "Cron quotidien": { "main": [[{ "node": "Vérifier transaction Firefly", "type": "main", "index": 0 }]] },
+    "Vérifier transaction Firefly": { "main": [[{ "node": "Loyer reçu ?", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gestion-locative" }]
+}
