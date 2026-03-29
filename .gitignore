@@ -1,0 +1,29 @@
+# Environment secrets
+.env
+
+# Firefly III local config
+firefly/.env
+
+# Paperless consume/export data
+paperless/consume/*
+paperless/export/*
+!paperless/consume/.gitkeep
+!paperless/export/.gitkeep
+
+# Docker volumes data
+volumes/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup archives
+*.tar.gz
+*.tar.bz2
+
+# IDE
+.vscode/
+.idea/
+
+# Typst build output
+*.pdf
