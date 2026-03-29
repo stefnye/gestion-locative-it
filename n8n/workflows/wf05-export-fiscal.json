@@ -1,0 +1,63 @@
+{
+  "name": "WF-05 : Export fiscal annuel",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 9 1 3 *" }]
+        }
+      },
+      "name": "Cron annuel (1er mars)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.FIREFLY_URL }}/api/v1/transactions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "Récupérer transactions Firefly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "notes": "Récupère toutes les transactions de l'année fiscale précédente"
+    },
+    {
+      "parameters": {},
+      "name": "Agrégation par catégorie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "notes": "Agrège par catégorie : revenus fonciers, charges déductibles, intérêts, assurances"
+    },
+    {
+      "parameters": {
+        "command": "typst compile /templates/recap-fiscal.typ ..."
+      },
+      "name": "Générer PDF récap fiscal",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "notes": "PDF pour déclaration 2072 (SCI) et 2042 (IRPP)"
+    },
+    {
+      "parameters": {},
+      "name": "Upload Paperless + Telegram",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1120, 300],
+      "notes": "Archivage Paperless-ngx + notification Telegram"
+    }
+  ],
+  "connections": {
+    "Cron annuel (1er mars)": { "main": [[{ "node": "Récupérer transactions Firefly", "type": "main", "index": 0 }]] },
+    "Récupérer transactions Firefly": { "main": [[{ "node": "Agrégation par catégorie", "type": "main", "index": 0 }]] },
+    "Agrégation par catégorie": { "main": [[{ "node": "Générer PDF récap fiscal", "type": "main", "index": 0 }]] },
+    "Générer PDF récap fiscal": { "main": [[{ "node": "Upload Paperless + Telegram", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gestion-locative" }]
+}

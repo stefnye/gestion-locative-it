@@ -1,0 +1,57 @@
+{
+  "name": "WF-02 : Génération quittance",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Webhook / Trigger WF-01",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "notes": "Déclenché par WF-01 quand le loyer est détecté"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.NOCODB_URL }}/api/v1/db/data/noco/{{ $env.NOCODB_PROJECT }}/baux",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "name": "Récupérer données bail NocoDB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "command": "typst compile /templates/quittance.typ --input nom=\"{{ $json.nom }}\" --input prenom=\"{{ $json.prenom }}\" --input mois=\"{{ $json.mois }}\" --input loyer=\"{{ $json.loyer_hc }}\" --input charges=\"{{ $json.charges }}\" /tmp/quittance-{{ $json.mois }}.pdf"
+      },
+      "name": "Compiler quittance Typst",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "notes": "Génère le PDF via Typst CLI"
+    },
+    {
+      "parameters": {},
+      "name": "Upload Paperless-ngx",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 200],
+      "notes": "Upload du PDF dans Paperless-ngx via API"
+    },
+    {
+      "parameters": {},
+      "name": "Notification Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [900, 400],
+      "notes": "Envoi quittance PDF au locataire via Telegram"
+    }
+  ],
+  "connections": {
+    "Webhook / Trigger WF-01": { "main": [[{ "node": "Récupérer données bail NocoDB", "type": "main", "index": 0 }]] },
+    "Récupérer données bail NocoDB": { "main": [[{ "node": "Compiler quittance Typst", "type": "main", "index": 0 }]] },
+    "Compiler quittance Typst": { "main": [[{ "node": "Upload Paperless-ngx", "type": "main", "index": 0 }, { "node": "Notification Telegram", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "gestion-locative" }]
+}
